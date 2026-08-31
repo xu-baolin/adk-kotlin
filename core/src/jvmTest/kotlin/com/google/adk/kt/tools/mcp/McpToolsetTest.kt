@@ -89,6 +89,26 @@ class McpToolsetTest {
   }
 
   @Test
+  fun getTools_defersMalformedSchemaUntilTheToolDeclarationIsRequested() = runTest {
+    val mockMcpSession = mock<McpAsyncClient>()
+    val malformedTool =
+      McpSchema.Tool.builder()
+        .name("malformedTool")
+        .description("Bad schema")
+        .inputSchema(McpSchema.JsonSchema("invalid-type", null, null, false, null, null))
+        .build()
+    whenever(mockMcpSession.listTools()) doReturn mono {
+      McpSchema.ListToolsResult(listOf(malformedTool), null)
+    }
+    val mockSessionManager =
+      mock<SessionManager> { onBlocking { getSession(any(), anyOrNull()) } doReturn mockMcpSession }
+
+    val tool = McpToolset(mockSessionManager).getTools().single()
+
+    assertFailsWith<McpToolException.McpToolDeclarationException> { tool.declaration() }
+  }
+
+  @Test
   fun loadTools_withUseMcpResourcesTrueAndServerSupport_includesResourceTools() = runTest {
     val mockMcpSession = mock<McpAsyncClient>()
     whenever(mockMcpSession.serverCapabilities) doReturn withResourcesCapabilities
